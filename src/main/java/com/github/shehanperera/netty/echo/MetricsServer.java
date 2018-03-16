@@ -29,7 +29,9 @@ public class MetricsServer {
     private final MetricRegistry metricRegistry = new MetricRegistry();
     private Histogram responseSize;
     private Timer responsesTime;
-    private Counter totallJobs;
+    private Counter totalJobs;
+    private Counter successJobs;
+    private Histogram requestSize;
     private JmxReporter JmxReporter;
     private ConsoleReporter ConsoleReporter;
 
@@ -37,7 +39,9 @@ public class MetricsServer {
 
         responsesTime = this.metricRegistry.timer("Time To Response");
         responseSize = this.metricRegistry.histogram("Response Size");
-        totallJobs=this.metricRegistry.counter("Total Jobs");
+        requestSize = this.metricRegistry.histogram("Request Size");
+        totalJobs = this.metricRegistry.counter("Total Jobs");
+        successJobs=this.metricRegistry.counter("Success Jobs");
     }
 
     public static MetricsServer getInstance() {
@@ -58,9 +62,19 @@ public class MetricsServer {
         return responseSize;
     }
 
-    public Counter getTotallJobs() {
+    public Histogram getRequestSize() {
 
-        return totallJobs;
+        return requestSize;
+    }
+
+    public Counter getSuccessJobs() {
+
+        return successJobs;
+    }
+
+    public Counter getTotalJobs() {
+
+        return totalJobs;
     }
 
     public void startReport() {
