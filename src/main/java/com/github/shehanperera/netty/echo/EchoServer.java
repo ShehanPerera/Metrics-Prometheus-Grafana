@@ -14,62 +14,82 @@
  */
 package com.github.shehanperera.netty.echo;
 
+import com.beust.jcommander.Parameter;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 
-import java.net.InetSocketAddress;
+import java.security.cert.CertificateException;
+import javax.net.ssl.SSLException;
+
 /**
  * This is the Netty-echo-server that echoes back any received data from client
- *
  */
 public class EchoServer {
 
-    private final int port;
-    /**
-     * This set port fot the server
-     *
-     * @param port Port of the Netty-echo-server
-     */
-    public EchoServer(int port) {
-
-        this.port = port;
-    }
+    @Parameter(names = "port", description = "Server Port")
+    private int port = 9091;
 
     public static void main(String[] args) throws Exception {
 
         MetricsServer.getInstance().startReport();
-        new EchoServer(9091).start();
+        EchoServer echoHttpServer = new EchoServer();
+        echoHttpServer.startServer();
+
     }
-    /**
-     * Starter for Netty-echo-server
-     *
-     */
-    public void start() throws Exception {
 
-        System.out.println("Server Start !!");
-        EventLoopGroup group = new NioEventLoopGroup();
-        try {
-            ServerBootstrap b = new ServerBootstrap();
-            b.group(group)
-                    .channel(NioServerSocketChannel.class)
-                    .localAddress(new InetSocketAddress(port))
-                    .childHandler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+    private void startServer() throws SSLException, CertificateException, InterruptedException {
 
-                            socketChannel.pipeline().addLast(new EchoServerHandler());
-                        }
-                    });
-            ChannelFuture f = b.bind().sync();
-            f.channel().closeFuture().sync();
-        } finally {
-            group.shutdownGracefully().sync();
+        System.out.println("Start Server !");
+        final SslContext sslCtx;
+        if (false) {
+            SelfSignedCertificate ssc = new SelfSignedCertificate();
+            sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        } else {
+            sslCtx = null;
         }
 
+        // Configure the server.
+        EventLoopGroup bossGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
+        EventLoopGroup workerGroup = new NioEventLoopGroup(200);
+        try {
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .option(ChannelOption.SO_BACKLOG, 1024)
+                    .childOption(ChannelOption.SO_KEEPALIVE, true)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        public void initChannel(SocketChannel ch) throws Exception {
+
+                            ChannelPipeline p = ch.pipeline();
+                            if (sslCtx != null) {
+                                p.addLast(sslCtx.newHandler(ch.alloc()));
+                            }
+                            p.addLast(new HttpServerCodec());
+                            p.addLast("aggregator", new HttpObjectAggregator(1048576));
+                            p.addLast(new EchoServerHandler());
+                        }
+                    });
+
+            // Start the server.
+            ChannelFuture f = b.bind(port).sync();
+            f.channel().closeFuture().sync();
+        } finally {
+            // Shut down all event loops to terminate all threads.
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
     }
 }
