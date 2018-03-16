@@ -4,7 +4,7 @@
     <groupId>com.github.shehanperera.netty.echo</groupId>
     <artifactId>netty-echo-server</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <name>netty-echo-server</name>
     <url>http://maven.apache.org</url>
     <build>
